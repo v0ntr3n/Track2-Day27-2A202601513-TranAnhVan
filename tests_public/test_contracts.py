@@ -54,10 +54,12 @@ def test_invalid_currency_is_detected():
 
 def test_type_drift_is_detected():
     df = healthy_df()
-    # Insert invalid string into integer column
+    # Insert invalid string into integer column (convert to object first to prevent pandas dtype error)
+    df["order_id"] = df["order_id"].astype(object)
     df.loc[0, "order_id"] = "not_an_integer"
     issues = failed(validate_orders(df, CONTRACT))
     assert any(i["check"] == "type" and i["column"] == "order_id" for i in issues)
+
 
 
 def test_freshness_delay_is_detected():
