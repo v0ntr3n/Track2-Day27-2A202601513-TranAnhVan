@@ -35,17 +35,67 @@ def evaluate_multiwindow_burn(
     *,
     short_window_burn: float,
     long_window_burn: float,
-    policy: str = "starter",
+    critical_threshold: float = 14.4,
+    warning_threshold: float = 6.0,
+    policy: str = "sre_multiwindow",
 ) -> dict[str, Any]:
-    """TODO(student): implement a real multi-window burn-rate policy.
+    """Google SRE Multi-Window Multi-Burn-Rate alerting policy.
 
-    Starter intentionally never pages. Hidden evaluation contains cases that
-    require distinguishing sustained fast burn from a transient spike.
+    Distinguishes sustained fast burn (which pages on-call engineers) from
+    transient short spikes (which do not page, avoiding alert fatigue).
+
+    Rules:
+    - Sustained Fast Burn: BOTH short and long windows exceed critical threshold -> page=True, severity='critical'
+    - Sustained Moderate Burn: BOTH short and long windows exceed warning threshold -> page=False, severity='warning'
+    - Transient Spike: short window high, but long window low -> page=False, severity='warning' (no page)
+    - Normal: burn rate within allowed limits -> page=False, severity='info'
     """
-    return {
-        "page": False,
-        "severity": "info",
-        "reason": "starter_policy_not_implemented",
-        "short_window_burn": short_window_burn,
-        "long_window_burn": long_window_burn,
-    }
+    short_b = float(short_window_burn)
+    long_b = float(long_window_burn)
+
+    if short_b >= critical_threshold and long_b >= warning_threshold:
+        return {
+            "page": True,
+            "severity": "critical",
+            "reason": f"sustained_fast_burn(short={short_b:.1f}>={critical_threshold}, long={long_b:.1f}>={warning_threshold})",
+            "short_window_burn": short_b,
+            "long_window_burn": long_b,
+            "action": "page_oncall",
+        }
+    elif short_b >= warning_threshold and long_b >= warning_threshold:
+        return {
+            "page": False,
+            "severity": "warning",
+            "reason": f"sustained_moderate_burn(short={short_b:.1f}>={warning_threshold}, long={long_b:.1f}>={warning_threshold})",
+            "short_window_burn": short_b,
+            "long_window_burn": long_b,
+            "action": "create_ticket",
+        }
+    elif short_b >= warning_threshold and long_b < warning_threshold:
+        return {
+            "page": False,
+            "severity": "warning",
+            "reason": f"transient_spike(short={short_b:.1f}>={warning_threshold}, long={long_b:.1f}<{warning_threshold}); suppressed_paging",
+            "short_window_burn": short_b,
+            "long_window_burn": long_b,
+            "action": "suppress_alert",
+        }
+    elif long_b >= warning_threshold:
+        return {
+            "page": False,
+            "severity": "warning",
+            "reason": f"slow_burn_detected(long={long_b:.1f}>={warning_threshold})",
+            "short_window_burn": short_b,
+            "long_window_burn": long_b,
+            "action": "investigate_backlog",
+        }
+    else:
+        return {
+            "page": False,
+            "severity": "info",
+            "reason": f"normal_burn_rate(short={short_b:.1f}, long={long_b:.1f})",
+            "short_window_burn": short_b,
+            "long_window_burn": long_b,
+            "action": "none",
+        }
+

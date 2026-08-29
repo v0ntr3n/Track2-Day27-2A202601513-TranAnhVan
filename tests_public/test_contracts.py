@@ -50,3 +50,19 @@ def test_invalid_currency_is_detected():
     df.loc[0, "currency"] = "BTC"
     issues = failed(validate_orders(df, CONTRACT))
     assert any(i["check"] == "accepted_values" and i["column"] == "currency" for i in issues)
+
+
+def test_type_drift_is_detected():
+    df = healthy_df()
+    # Insert invalid string into integer column
+    df.loc[0, "order_id"] = "not_an_integer"
+    issues = failed(validate_orders(df, CONTRACT))
+    assert any(i["check"] == "type" and i["column"] == "order_id" for i in issues)
+
+
+def test_freshness_delay_is_detected():
+    df = healthy_df()
+    # Reference time is 2 hours later than updated_at (contract max delay is 30 mins)
+    issues = failed(validate_orders(df, CONTRACT, reference_time="2026-08-28T12:05:00Z"))
+    assert any(i["check"] == "freshness" and i["column"] == "updated_at" for i in issues)
+
